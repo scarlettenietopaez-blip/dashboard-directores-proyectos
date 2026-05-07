@@ -1,0 +1,66 @@
+name: Publicar y actualizar dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [update_projects]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Actualizar data/projects.json desde Power Automate
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const payload = event.client_payload || {};
+
+          const records = Array.isArray(payload.projects)
+            ? payload.projects
+            : (Array.isArray(payload.records) ? payload.records : []);
+
+          const output = {
+            updatedAt: new Date().toISOString().slice(0, 10),
+            records
+          };
+
+          fs.mkdirSync('data', { recursive: true });
+          fs.writeFileSync('data/projects.json', JSON.stringify(output, null, 2), 'utf8');
+          NODE
+
+      - name: Guardar actualización en el repositorio
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/projects.json
+          git diff --staged --quiet || git commit -m "Actualizar proyectos desde Excel Online"
+          git push
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir sitio a GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Publicar dashboard
+        uses: actions/deploy-pages@v4
