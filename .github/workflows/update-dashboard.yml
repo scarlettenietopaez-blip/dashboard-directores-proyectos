@@ -1,35 +1,66 @@
-name: Actualizar projects.json desde Power Automate
+name: Actualizar dashboard desde Power Automate por partes
 
 on:
   repository_dispatch:
-    types: [update_projects]
+    types: [update_projects_chunk, finish_projects_update]
 
 permissions:
   contents: write
 
 jobs:
-  actualizar-json:
+  update-dashboard:
     runs-on: ubuntu-latest
 
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Actualizar archivo projects.json
+      - name: Guardar bloque recibido
+        if: github.event.action == 'update_projects_chunk'
         run: |
           node <<'NODE'
           const fs = require('fs');
 
-          const event = JSON.parse(
+          const payload = JSON.parse(
             fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')
-          );
+          ).client_payload;
 
-          const projects = event.client_payload.projects || [];
+          const chunk = payload.chunk;
+          const projects = payload.projects || [];
+
+          fs.mkdirSync('data/chunks', { recursive: true });
+          fs.writeFileSync(
+            `data/chunks/chunk_${chunk}.json`,
+            JSON.stringify(projects, null, 2),
+            'utf8'
+          );
+          NODE
+
+      - name: Unir bloques y actualizar projects.json
+        if: github.event.action == 'finish_projects_update'
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const payload = JSON.parse(
+            fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')
+          ).client_payload;
+
+          const chunks = payload.chunks || [];
+          let allProjects = [];
+
+          for (const chunk of chunks) {
+            const file = `data/chunks/chunk_${chunk}.json`;
+            if (fs.existsSync(file)) {
+              const projects = JSON.parse(fs.readFileSync(file, 'utf8'));
+              allProjects = allProjects.concat(projects);
+            }
+          }
 
           fs.mkdirSync('data', { recursive: true });
           fs.writeFileSync(
             'data/projects.json',
-            JSON.stringify(projects, null, 2),
+            JSON.stringify(allProjects, null, 2),
             'utf8'
           );
           NODE
@@ -38,6 +69,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/projects.json
+          git add data/projects.json data/chunks/
           git diff --staged --quiet || git commit -m "Actualizar proyectos desde Excel"
           git push
