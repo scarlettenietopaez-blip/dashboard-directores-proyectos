@@ -1,0 +1,43 @@
+name: Actualizar projects.json desde Power Automate
+
+on:
+  repository_dispatch:
+    types: [update_projects]
+
+permissions:
+  contents: write
+
+jobs:
+  actualizar-json:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Actualizar archivo projects.json
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const event = JSON.parse(
+            fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')
+          );
+
+          const projects = event.client_payload.projects || [];
+
+          fs.mkdirSync('data', { recursive: true });
+          fs.writeFileSync(
+            'data/projects.json',
+            JSON.stringify(projects, null, 2),
+            'utf8'
+          );
+          NODE
+
+      - name: Guardar cambios en GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/projects.json
+          git diff --staged --quiet || git commit -m "Actualizar proyectos desde Excel"
+          git push
