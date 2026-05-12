@@ -26,10 +26,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install openpyxl
 
-      - name: Descargar Excel desde OneDrive o SharePoint
+                - name: Descargar Excel desde OneDrive o SharePoint
         run: |
           mkdir -p data
-          curl -L "${{ secrets.EXCEL_URL }}" -o data/source.xlsx
+          curl -L --fail --retry 3 \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36" \
+            -H "Accept: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/octet-stream,*/*" \
+            -H "Accept-Language: es-ES,es;q=0.9,en;q=0.8" \
+            "${{ secrets.EXCEL_URL }}" \
+            -o data/source.xlsx
 
       - name: Verificar que el archivo sea un Excel válido
         run: |
