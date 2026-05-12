@@ -3,7 +3,11 @@ name: Actualizar dashboard desde Power Automate por partes
 on:
   repository_dispatch:
     types: [update_projects_chunk, finish_projects_update]
-
+    
+concurrency:
+  group: dashboard-update
+  cancel-in-progress: false
+  
 permissions:
   contents: write
 
